@@ -20,7 +20,7 @@ library(readr)
 # 2. Load Raw Data
 # -------------------------------------------------------------------
 # Read the original Stata file
-raw_data <- read_dta("Data check/00_Phase1_clean.dta")
+raw_data <- read_dta("00_Phase1_clean.dta")
 
 # 3. Select and Rename Variables
 # -------------------------------------------------------------------

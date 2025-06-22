@@ -1,6 +1,5 @@
 ---
-title: "Reproduction Code for Supplementary Tables S1-S10"
-author: "Analysis for 'Symbolic Incentives in High-Stakes Prosocial Behavior'"
+title: "Symbolic Incentives in High-Stakes Prosocial Behavior Supplementary Tables S1-S10"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
   pdf_document:
@@ -9,381 +8,547 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-# Global settings for code chunks
-knitr::opts_chunk$set(
-  echo = TRUE,       # Show code so reviewers can follow
-  message = FALSE,
-  warning = FALSE,
-  fig.align = 'center'
-)
-
 # Load necessary libraries
 library(tidyverse)
-library(knitr)      # For creating tables
 library(lmtest)
 library(sandwich)
 library(margins)
-library(modelsummary)
+options(digits=4)
+
 ```
 
-# Introduction
-
-This document provides the R code to reproduce Supplementary Tables S1 through S10. The code reads from `reproducible_dataset.csv`, a cleaned dataset containing only the variables necessary for this analysis.
+# Data Loading
 
 ```{r load-data}
-# Load the clean, reproducible dataset
-df <- read_csv('reproducible_dataset.csv')
+# Load the dataset
+df <- read_csv('final_dataset.csv')
 
-# Define the two main analysis samples for convenience
+# Define the two main analysis samples
 baseline_sample <- df
 study_sample <- df %>% filter(is_study_sample == TRUE)
-```
 
-\newpage
+# Show sample sizes
+print(paste("Baseline sample size:", nrow(baseline_sample)))
+print(paste("Study sample size:", nrow(study_sample)))
+```
 
 # Table S1: Study Sample Representativeness
 
-This table compares the characteristics of the study sample to the general US population.
-
 ```{r table-s1}
-# Create a summary of the study sample
-s1_study_summary <- study_sample %>%
+# Calculate means for each characteristic in the study sample
+table_s1_results <- study_sample %>%
   summarise(
-    `Female` = mean(is_female, na.rm = TRUE),
-    `White` = mean(race == "White", na.rm = TRUE),
-    `Hispanic` = mean(race == "Hispanic", na.rm = TRUE),
-    `Other Race` = mean(race == "Other", na.rm = TRUE),
-    `Black` = mean(race == "Black", na.rm = TRUE),
-    `Asian` = mean(race == "Asian", na.rm = TRUE),
-    `Age (years)` = mean(age, na.rm = TRUE),
-    `Prior Plasma Donation` = mean(prior_plasma_donation, na.rm = TRUE),
-    `AB+ or AB- Blood Type` = mean(is_ab_blood_type, na.rm = TRUE),
-    `Annual Donation Avg.` = mean(avg_annual_donations, na.rm = TRUE),
-    `Median Income ($)` = mean(zip_median_income, na.rm = TRUE),
-    `Midwest Region` = mean(us_region == "Midwest", na.rm = TRUE),
-    `Northeast Region` = mean(us_region == "Northeast", na.rm = TRUE),
-    `South Region` = mean(us_region == "South", na.rm = TRUE),
-    `West Region` = mean(us_region == "West", na.rm = TRUE),
-    `Urban Region` = mean(is_urban, na.rm = TRUE),
-    `COVID-19 Incidence` = mean(county_covid_per_100k, na.rm = TRUE)
-  ) %>%
-  pivot_longer(everything(), names_to = "Characteristic", values_to = "Study Sample")
+    female_prop = mean(is_female, na.rm = TRUE),
+    white_prop = mean(race == "White", na.rm = TRUE),
+    hispanic_prop = mean(race == "Hispanic", na.rm = TRUE),
+    other_prop = mean(race == "Other", na.rm = TRUE),
+    black_prop = mean(race == "Black", na.rm = TRUE),
+    asian_prop = mean(race == "Asian", na.rm = TRUE),
+    age_mean = mean(age, na.rm = TRUE),
+    prior_plasma_prop = mean(prior_plasma_donation, na.rm = TRUE),
+    ab_blood_prop = mean(is_ab_blood_type, na.rm = TRUE),
+    annual_donations_mean = mean(avg_annual_donations, na.rm = TRUE),
+    median_income_mean = mean(zip_median_income, na.rm = TRUE),
+    midwest_prop = mean(us_region == "Midwest", na.rm = TRUE),
+    northeast_prop = mean(us_region == "Northeast", na.rm = TRUE),
+    south_prop = mean(us_region == "South", na.rm = TRUE),
+    west_prop = mean(us_region == "West", na.rm = TRUE),
+    urban_prop = mean(is_urban, na.rm = TRUE),
+    covid_incidence_mean = mean(county_covid_per_100k, na.rm = TRUE)
+  )
 
-# Manually create the US Population data frame
-us_pop_data <- tribble(
-  ~Characteristic,             ~`US Population`,
-  "Female",                    0.508, "White",                     0.763,
-  "Hispanic",                  0.185, "Other Race",                0.03,
-  "Black",                     0.134, "Asian",                     0.06,
-  "Age (years)",               38.10, "Prior Plasma Donation",     NA,
-  "AB+ or AB- Blood Type",     0.040, "Annual Donation Avg.",      NA,
-  "Median Income ($)",         67521.00, "Midwest Region",            0.21,
-  "Northeast Region",          0.17, "South Region",              0.38,
-  "West Region",               0.24, "Urban Region",              0.807,
-  "COVID-19 Incidence",        4224
-)
-
-# Join the two summaries and display the table using kable
-table_s1 <- left_join(s1_study_summary, us_pop_data, by = "Characteristic")
-kable(table_s1, caption = "Table S1: Study Sample Representativeness", digits = 3, format = "latex", booktabs = TRUE)
+# Print results
+print("Table S1 Results - Study Sample Characteristics:")
+print(t(table_s1_results))
 ```
-
-\newpage
 
 # Table S2: Balance Check
 
-This table checks for balance on covariates between the treatment and control groups.
-
 ```{r table-s2}
-# Panel A: Study Sample Balance
-panel_a <- study_sample %>%
-  group_by(treatment_group) %>%
-  summarise(
-    Female = mean(is_female), White = mean(race == "White"), Age = mean(age),
-    `Prior Plasma Donation` = mean(prior_plasma_donation),
-    `Annual Donation Avg.` = mean(avg_annual_donations),
-    `Median Income` = mean(zip_median_income), `Urban Region` = mean(is_urban),
-    `COVID-19 Incidence` = mean(county_covid_per_100k)
-  ) %>%
-  pivot_longer(-treatment_group, names_to = "Characteristic") %>%
-  pivot_wider(names_from = treatment_group, values_from = value)
+# Panel A: Study Sample Balance Check
 
-kable(panel_a, caption = "Table S2 (Panel A): Study Sample Demographics Balance", digits = 2, format = "latex", booktabs = TRUE)
+# For continuous variables (age, annual donations, income, covid incidence)
+print("Panel A - Continuous Variables Balance:")
 
-# Panel B: Baseline Sample Selection Criteria Balance
-panel_b <- baseline_sample %>%
-  group_by(treatment_group) %>%
-  summarise(`Opened Email` = mean(email_opened), `No Phone Contact` = mean(no_phone_contact)) %>%
-  pivot_longer(-treatment_group, names_to = "Characteristic") %>%
-  pivot_wider(names_from = treatment_group, values_from = value)
+# Age
+age_control <- study_sample %>% filter(treatment_group == "Control") %>% pull(age)
+age_treatment <- study_sample %>% filter(treatment_group == "Symbolic Incentives") %>% pull(age)
+age_test <- t.test(age_control, age_treatment)
+print(paste("Age - Control mean:", round(mean(age_control, na.rm=TRUE), 2), 
+            "Treatment mean:", round(mean(age_treatment, na.rm=TRUE), 2),
+            "Difference:", round(mean(age_treatment, na.rm=TRUE) - mean(age_control, na.rm=TRUE), 2),
+            "p-value:", round(age_test$p.value, 3)))
 
-kable(panel_b, caption = "Table S2 (Panel B): Sample Selection Criteria Balance", digits = 2, format = "latex", booktabs = TRUE)
+# Annual donations
+donations_control <- study_sample %>% filter(treatment_group == "Control") %>% pull(avg_annual_donations)
+donations_treatment <- study_sample %>% filter(treatment_group == "Symbolic Incentives") %>% pull(avg_annual_donations)
+donations_test <- t.test(donations_control, donations_treatment)
+print(paste("Annual Donations - Control mean:", round(mean(donations_control, na.rm=TRUE), 2), 
+            "Treatment mean:", round(mean(donations_treatment, na.rm=TRUE), 2),
+            "Difference:", round(mean(donations_treatment, na.rm=TRUE) - mean(donations_control, na.rm=TRUE), 2),
+            "p-value:", round(donations_test$p.value, 3)))
+
+# Median income
+income_control <- study_sample %>% filter(treatment_group == "Control") %>% pull(zip_median_income)
+income_treatment <- study_sample %>% filter(treatment_group == "Symbolic Incentives") %>% pull(zip_median_income)
+income_test <- t.test(income_control, income_treatment)
+print(paste("Median Income - Control mean:", round(mean(income_control, na.rm=TRUE), 2), 
+            "Treatment mean:", round(mean(income_treatment, na.rm=TRUE), 2),
+            "Difference:", round(mean(income_treatment, na.rm=TRUE) - mean(income_control, na.rm=TRUE), 2),
+            "p-value:", round(income_test$p.value, 3)))
+
+# COVID-19 incidence
+covid_control <- study_sample %>% filter(treatment_group == "Control") %>% pull(county_covid_per_100k)
+covid_treatment <- study_sample %>% filter(treatment_group == "Symbolic Incentives") %>% pull(county_covid_per_100k)
+covid_test <- t.test(covid_control, covid_treatment)
+print(paste("COVID-19 Incidence - Control mean:", round(mean(covid_control, na.rm=TRUE), 2), 
+            "Treatment mean:", round(mean(covid_treatment, na.rm=TRUE), 2),
+            "Difference:", round(mean(covid_treatment, na.rm=TRUE) - mean(covid_control, na.rm=TRUE), 2),
+            "p-value:", round(covid_test$p.value, 3)))
+
+# For binary variables
+print("\nPanel A - Binary Variables Balance:")
+
+# Female
+female_table <- table(study_sample$is_female, study_sample$treatment_group)
+female_test <- chisq.test(female_table)
+female_props <- prop.table(female_table, 2)
+print(paste("Female - Control prop:", round(female_props[2,1], 3), 
+            "Treatment prop:", round(female_props[2,2], 3),
+            "Difference:", round(female_props[2,2] - female_props[2,1], 3),
+            "p-value:", round(female_test$p.value, 3)))
+
+# Prior plasma donation
+prior_table <- table(study_sample$prior_plasma_donation, study_sample$treatment_group)
+prior_test <- chisq.test(prior_table)
+prior_props <- prop.table(prior_table, 2)
+print(paste("Prior Plasma - Control prop:", round(prior_props[2,1], 3), 
+            "Treatment prop:", round(prior_props[2,2], 3),
+            "Difference:", round(prior_props[2,2] - prior_props[2,1], 3),
+            "p-value:", round(prior_test$p.value, 3)))
+
+# Urban region
+urban_table <- table(study_sample$is_urban, study_sample$treatment_group)
+urban_test <- chisq.test(urban_table)
+urban_props <- prop.table(urban_table, 2)
+print(paste("Urban Region - Control prop:", round(urban_props[2,1], 3), 
+            "Treatment prop:", round(urban_props[2,2], 3),
+            "Difference:", round(urban_props[2,2] - urban_props[2,1], 3),
+            "p-value:", round(urban_test$p.value, 3)))
+
+# For categorical variables
+print("\nPanel A - Categorical Variables Balance:")
+
+# Race
+race_table <- table(study_sample$race, study_sample$treatment_group)
+race_test <- chisq.test(race_table)
+print("Race proportions by treatment:")
+print(prop.table(race_table, 2))
+print(paste("Race chi-squared p-value:", round(race_test$p.value, 3)))
+
+# Blood type
+bloodtype_table <- table(study_sample$bloodtype_group, study_sample$treatment_group)
+bloodtype_test <- chisq.test(bloodtype_table)
+print("\nBlood type proportions by treatment:")
+print(prop.table(bloodtype_table, 2))
+print(paste("Blood type chi-squared p-value:", round(bloodtype_test$p.value, 3)))
+
+# US Region
+region_table <- table(study_sample$us_region, study_sample$treatment_group)
+region_test <- chisq.test(region_table)
+print("\nUS Region proportions by treatment:")
+print(prop.table(region_table, 2))
+print(paste("US Region chi-squared p-value:", round(region_test$p.value, 3)))
+
+# Wave
+wave_table <- table(study_sample$wave, study_sample$treatment_group)
+wave_test <- chisq.test(wave_table)
+print("\nWave proportions by treatment:")
+print(prop.table(wave_table, 2))
+print(paste("Wave chi-squared p-value:", round(wave_test$p.value, 3)))
+
+# Sample sizes
+print("\nPanel A - Sample Sizes:")
+print(table(study_sample$treatment_group))
+
+# Panel B: Baseline Sample Balance
+print("\n\nPanel B - Baseline Sample Selection Criteria:")
+
+# Email opened
+opened_table <- table(baseline_sample$email_opened, baseline_sample$treatment_group)
+opened_test <- chisq.test(opened_table)
+opened_props <- prop.table(opened_table, 2)
+print(paste("Email Opened - Control prop:", round(opened_props[2,1], 3), 
+            "Treatment prop:", round(opened_props[2,2], 3),
+            "Difference:", round(opened_props[2,2] - opened_props[2,1], 3),
+            "p-value:", round(opened_test$p.value, 3)))
+
+# No phone contact
+phone_table <- table(baseline_sample$no_phone_contact, baseline_sample$treatment_group)
+phone_test <- chisq.test(phone_table)
+phone_props <- prop.table(phone_table, 2)
+print(paste("No Phone Contact - Control prop:", round(phone_props[2,1], 3), 
+            "Treatment prop:", round(phone_props[2,2], 3),
+            "Difference:", round(phone_props[2,2] - phone_props[2,1], 3),
+            "p-value:", round(phone_test$p.value, 3)))
+
+print("\nPanel B - Sample Sizes:")
+print(table(baseline_sample$treatment_group))
 ```
-
-\newpage
 
 # Table S3: Attrition Information
 
-This table shows the number of donors enrolled, analyzed, and excluded.
-
 ```{r table-s3}
-table_s3 <- baseline_sample %>%
-  mutate(ExclusionReason = case_when(
-    is_study_sample == FALSE & email_opened == 0 & no_phone_contact == 0 ~ "Excluded (Both)",
-    is_study_sample == FALSE & email_opened == 0 ~ "Excluded (Did Not Open)",
-    is_study_sample == FALSE & no_phone_contact == 0 ~ "Excluded (Phone Contact)",
-    TRUE ~ "Analyzed (Study Sample)"
-  )) %>%
+# Calculate attrition by treatment group
+attrition_summary <- baseline_sample %>%
   group_by(treatment_group) %>%
-  count(ExclusionReason) %>%
-  pivot_wider(names_from = ExclusionReason, values_from = n)
+  summarise(
+    enrolled = n(),
+    analyzed = sum(is_study_sample, na.rm = TRUE),
+    excluded_total = enrolled - analyzed,
+    # Criterion 1 only: did not open email, but no phone contact
+    excluded_crit1_only = sum(email_opened == 0 & no_phone_contact == 1, na.rm = TRUE),
+    # Criterion 2 only: had phone contact, but did open email
+    excluded_crit2_only = sum(email_opened == 1 & no_phone_contact == 0, na.rm = TRUE),
+    # Both criteria: neither opened email nor phone contact
+    excluded_both = sum(email_opened == 0 & no_phone_contact == 0, na.rm = TRUE),
+    # Calculate proportions
+    prop_crit1 = excluded_crit1_only / excluded_total,
+    prop_crit2 = excluded_crit2_only / excluded_total,
+    prop_both = excluded_both / excluded_total
+  )
 
-kable(table_s3, caption = "Table S3: Attrition Information", format = "latex", booktabs = TRUE)
+print("Table S3 - Attrition Information:")
+print(attrition_summary)
 ```
-
-\newpage
 
 # Table S4: Main Analysis (Average Marginal Effects)
 
-This table shows the Average Marginal Effects (AMEs) from logistic regressions on the primary outcomes.
-
 ```{r table-s4}
-# Define the control variables for the models
-controls <- "is_female + age + race + prior_plasma_donation + bloodtype_group + avg_annual_donations + zip_median_income + us_region + is_urban + county_covid_per_100k"
+# Model 1: Appointment creation without controls
+model1 <- glm(appointment_within_48h ~ treatment_group + factor(wave), 
+              data = study_sample, family = "binomial")
+print("Model 1 - Appointment Creation (No Controls):")
+summary(model1)
 
-# Run models
-m1 <- glm(as.formula(paste("appointment_within_48h ~ treatment_group + factor(wave)")), data = study_sample, family = "binomial")
-m2 <- glm(as.formula(paste("appointment_within_48h ~ treatment_group + factor(wave) +", controls)), data = study_sample, family = "binomial")
-m3 <- glm(as.formula(paste("donated_within_13d ~ treatment_group + factor(wave)")), data = study_sample, family = "binomial")
-m4 <- glm(as.formula(paste("donated_within_13d ~ treatment_group + factor(wave) +", controls)), data = study_sample, family = "binomial")
+# Calculate AME for Model 1
+margins1 <- margins(model1)
+print("\nAME for Model 1:")
+summary(margins1)
 
-# Helper function to extract and format AMEs correctly
-get_ame <- function(model) {
-  s <- summary(margins(model))
-  # Find the treatment effect row
-  treatment_row <- s %>% filter(grepl("treatment_group", factor))
-  
-  # Format the estimate with stars and the standard error
-  stars <- case_when(treatment_row$p < 0.01 ~ "*", treatment_row$p < 0.05 ~ "*", treatment_row$p < 0.1 ~ "+", TRUE ~ "")
-  estimate_str <- paste0(sprintf("%.4f", treatment_row$AME), stars)
-  se_str <- paste0("(", sprintf("%.4f", treatment_row$SE), ")")
-  
-  return(c(estimate_str, se_str))
-}
+# Model 2: Appointment creation with controls
+model2 <- glm(appointment_within_48h ~ treatment_group + factor(wave) + 
+              is_female + age + race + prior_plasma_donation + bloodtype_group + 
+              avg_annual_donations + zip_median_income + us_region + is_urban + 
+              county_covid_per_100k, 
+              data = study_sample, family = "binomial")
+print("\n\nModel 2 - Appointment Creation (With Controls):")
+summary(model2)
 
-# Manually build the results table to ensure correctness
-results_table <- data.frame(
-  Term = c("Symbolic Incentives", ""),
-  `(1) Appt. Creation` = get_ame(m1),
-  `(2) Appt. Creation` = get_ame(m2),
-  `(3) Donation` = get_ame(m3),
-  `(4) Donation` = get_ame(m4)
-)
+# Calculate AME for Model 2
+margins2 <- margins(model2)
+print("\nAME for Model 2:")
+summary(margins2)
 
-# Add GOF stats
-gof_rows <- data.frame(
-  Term = c("Num.Obs.", "Wave FE", "Controls"),
-  `(1) Appt. Creation` = c(nobs(m1), "Yes", "No"),
-  `(2) Appt. Creation` = c(nobs(m2), "Yes", "Yes"),
-  `(3) Donation` = c(nobs(m3), "Yes", "No"),
-  `(4) Donation` = c(nobs(m4), "Yes", "Yes")
-)
+# Model 3: Donation without controls
+model3 <- glm(donated_within_13d ~ treatment_group + factor(wave), 
+              data = study_sample, family = "binomial")
+print("\n\nModel 3 - Donation (No Controls):")
+summary(model3)
 
-# Combine and print using kable
-final_table_s4 <- bind_rows(results_table, gof_rows)
-kable(final_table_s4, caption = "Table S4: Effect of Symbolic Incentives (AMEs from Logistic Regression)", booktabs = TRUE, format = "latex", align = 'lcccc')
+# Calculate AME for Model 3
+margins3 <- margins(model3)
+print("\nAME for Model 3:")
+summary(margins3)
+
+# Model 4: Donation with controls
+model4 <- glm(donated_within_13d ~ treatment_group + factor(wave) + 
+              is_female + age + race + prior_plasma_donation + bloodtype_group + 
+              avg_annual_donations + zip_median_income + us_region + is_urban + 
+              county_covid_per_100k, 
+              data = study_sample, family = "binomial")
+print("\n\nModel 4 - Donation (With Controls):")
+summary(model4)
+
+# Calculate AME for Model 4
+margins4 <- margins(model4)
+print("\nAME for Model 4:")
+summary(margins4)
 ```
-
-\newpage
 
 # Table S5: Intent-to-Treat (ITT) Analysis
 
-This table repeats the main analysis on the full baseline population.
-
 ```{r table-s5}
-# Run models on the baseline sample
-m1_itt <- glm(as.formula(paste("appointment_within_48h ~ treatment_group + factor(wave)")), data = baseline_sample, family = "binomial")
-m2_itt <- glm(as.formula(paste("appointment_within_48h ~ treatment_group + factor(wave) +", controls)), data = baseline_sample, family = "binomial")
-m3_itt <- glm(as.formula(paste("donated_within_13d ~ treatment_group + factor(wave)")), data = baseline_sample, family = "binomial")
-m4_itt <- glm(as.formula(paste("donated_within_13d ~ treatment_group + factor(wave) +", controls)), data = baseline_sample, family = "binomial")
+# Repeat main analysis on baseline sample
+print("Table S5 - ITT Analysis on Full Baseline Sample")
 
-# Manually build the results table
-results_table_itt <- data.frame(
-  Term = c("Symbolic Incentives", ""),
-  `(1) Appt. Creation` = get_ame(m1_itt),
-  `(2) Appt. Creation` = get_ame(m2_itt),
-  `(3) Donation` = get_ame(m3_itt),
-  `(4) Donation` = get_ame(m4_itt)
-)
+# Model 1: Appointment creation without controls (ITT)
+model1_itt <- glm(appointment_within_48h ~ treatment_group + factor(wave), 
+                  data = baseline_sample, family = "binomial")
+margins1_itt <- margins(model1_itt)
+print("Model 1 ITT - Appointment Creation (No Controls):")
+summary(margins1_itt)
 
-gof_rows_itt <- data.frame(
-  Term = c("Num.Obs.", "Wave FE", "Controls"),
-  `(1) Appt. Creation` = c(nobs(m1_itt), "Yes", "No"),
-  `(2) Appt. Creation` = c(nobs(m2_itt), "Yes", "Yes"),
-  `(3) Donation` = c(nobs(m3_itt), "Yes", "No"),
-  `(4) Donation` = c(nobs(m4_itt), "Yes", "Yes")
-)
+# Model 2: Appointment creation with controls (ITT)
+model2_itt <- glm(appointment_within_48h ~ treatment_group + factor(wave) + 
+                  is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                  avg_annual_donations + zip_median_income + us_region + is_urban + 
+                  county_covid_per_100k, 
+                  data = baseline_sample, family = "binomial")
+margins2_itt <- margins(model2_itt)
+print("\nModel 2 ITT - Appointment Creation (With Controls):")
+summary(margins2_itt)
 
-final_table_s5 <- bind_rows(results_table_itt, gof_rows_itt)
-kable(final_table_s5, caption = "Table S5: ITT Analysis on Baseline Population (AMEs)", booktabs = TRUE, format = "latex", align = 'lcccc')
+# Model 3: Donation without controls (ITT)
+model3_itt <- glm(donated_within_13d ~ treatment_group + factor(wave), 
+                  data = baseline_sample, family = "binomial")
+margins3_itt <- margins(model3_itt)
+print("\nModel 3 ITT - Donation (No Controls):")
+summary(margins3_itt)
+
+# Model 4: Donation with controls (ITT)
+model4_itt <- glm(donated_within_13d ~ treatment_group + factor(wave) + 
+                  is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                  avg_annual_donations + zip_median_income + us_region + is_urban + 
+                  county_covid_per_100k, 
+                  data = baseline_sample, family = "binomial")
+margins4_itt <- margins(model4_itt)
+print("\nModel 4 ITT - Donation (With Controls):")
+summary(margins4_itt)
+
+print(paste("\nSample size for ITT analysis:", nrow(baseline_sample)))
 ```
-
-\newpage
 
 # Table S6: OLS Regressions
 
-This table shows the main results using OLS with robust standard errors.
-
 ```{r table-s6}
-# Run OLS models
-m1_ols <- lm(as.formula(paste("appointment_within_48h ~ treatment_group + factor(wave)")), data = study_sample)
-m2_ols <- lm(as.formula(paste("appointment_within_48h ~ treatment_group + factor(wave) +", controls)), data = study_sample)
-m3_ols <- lm(as.formula(paste("donated_within_13d ~ treatment_group + factor(wave)")), data = study_sample)
-m4_ols <- lm(as.formula(paste("donated_within_13d ~ treatment_group + factor(wave) +", controls)), data = study_sample)
+# OLS models with robust standard errors
+print("Table S6 - OLS Regressions with Robust Standard Errors")
 
-models_ols <- list(
-  "(1) Appt. Creation" = m1_ols, "(2) Appt. Creation" = m2_ols,
-  "(3) Donation" = m3_ols, "(4) Donation" = m4_ols
-)
+# Model 1: Appointment creation without controls (OLS)
+ols1 <- lm(appointment_within_48h ~ treatment_group + factor(wave), 
+           data = study_sample)
+print("Model 1 OLS - Appointment Creation (No Controls):")
+coeftest(ols1, vcov = vcovHC(ols1, type = "HC1"))
 
-modelsummary(models_ols,
-             title = "Table S6: Effect of Symbolic Incentives (OLS with Robust SEs)",
-             fmt = 4, estimate = "{estimate}{stars}", statistic = "({std.error})",
-             vcov = "HC1",
-             coef_map = c("treatment_groupSymbolic Incentives" = "Symbolic Incentives"),
-             gof_map = c("nobs"),
-             add_rows = data.frame(
-               "term" = c("Wave FE", "Controls"),
-               "(1) Appt. Creation" = c("Yes", "No"), "(2) Appt. Creation" = c("Yes", "Yes"),
-               "(3) Donation" = c("Yes", "No"), "(4) Donation" = c("Yes", "Yes")
-             ),
-             output = "latex")
+# Model 2: Appointment creation with controls (OLS)
+ols2 <- lm(appointment_within_48h ~ treatment_group + factor(wave) + 
+           is_female + age + race + prior_plasma_donation + bloodtype_group + 
+           avg_annual_donations + zip_median_income + us_region + is_urban + 
+           county_covid_per_100k, 
+           data = study_sample)
+print("\nModel 2 OLS - Appointment Creation (With Controls):")
+coeftest(ols2, vcov = vcovHC(ols2, type = "HC1"))
+
+# Model 3: Donation without controls (OLS)
+ols3 <- lm(donated_within_13d ~ treatment_group + factor(wave), 
+           data = study_sample)
+print("\nModel 3 OLS - Donation (No Controls):")
+coeftest(ols3, vcov = vcovHC(ols3, type = "HC1"))
+
+# Model 4: Donation with controls (OLS)
+ols4 <- lm(donated_within_13d ~ treatment_group + factor(wave) + 
+           is_female + age + race + prior_plasma_donation + bloodtype_group + 
+           avg_annual_donations + zip_median_income + us_region + is_urban + 
+           county_covid_per_100k, 
+           data = study_sample)
+print("\nModel 4 OLS - Donation (With Controls):")
+coeftest(ols4, vcov = vcovHC(ols4, type = "HC1"))
 ```
-
-\newpage
 
 # Table S7: Different Time Windows
 
-This table shows logistic regression coefficients for outcomes measured over different time horizons.
-
 ```{r table-s7}
-# Run models with different DVs
-m1_tf <- glm(as.formula(paste("appointment_within_24h ~ treatment_group + factor(wave) +", controls)), data = study_sample, family = "binomial")
-m2_tf <- glm(as.formula(paste("appointment_within_7d ~ treatment_group + factor(wave) +", controls)), data = study_sample, family = "binomial")
-m3_tf <- glm(as.formula(paste("appointment_anytime ~ treatment_group + factor(wave) +", controls)), data = study_sample, family = "binomial")
-m4_tf <- glm(as.formula(paste("donated_anytime ~ treatment_group + factor(wave) +", controls)), data = study_sample, family = "binomial")
+print("Table S7 - Different Time Windows (Logistic Regression)")
 
-models_tf <- list(
-  "(1) Appt. (24h)" = m1_tf, "(2) Appt. (7d)" = m2_tf,
-  "(3) Appt. (Anytime)" = m3_tf, "(4) Donation (Anytime)" = m4_tf
-)
+# 24-hour window
+model_24h <- glm(appointment_within_24h ~ treatment_group + factor(wave) + 
+                 is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                 avg_annual_donations + zip_median_income + us_region + is_urban + 
+                 county_covid_per_100k, 
+                 data = study_sample, family = "binomial")
+print("Appointment within 24 hours:")
+summary(model_24h)$coefficients["treatment_groupSymbolic Incentives",]
 
-modelsummary(models_tf,
-             title = "Table S7: Effect of Symbolic Incentives over Different Time Windows (Logit Coefficients)",
-             fmt = 4, estimate = "{estimate}{stars}", statistic = "({std.error})",
-             coef_map = c("treatment_groupSymbolic Incentives" = "Symbolic Incentives"),
-             gof_map = c("nobs"),
-             add_rows = data.frame(
-               "term" = c("Wave FE", "Controls"),
-               "(1) Appt. (24h)" = c("Yes", "Yes"), "(2) Appt. (7d)" = c("Yes", "Yes"),
-               "(3) Appt. (Anytime)" = c("Yes", "Yes"), "(4) Donation (Anytime)" = c("Yes", "Yes")
-             ),
-             output = "latex")
+# 7-day window
+model_7d <- glm(appointment_within_7d ~ treatment_group + factor(wave) + 
+                is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                avg_annual_donations + zip_median_income + us_region + is_urban + 
+                county_covid_per_100k, 
+                data = study_sample, family = "binomial")
+print("\nAppointment within 7 days:")
+summary(model_7d)$coefficients["treatment_groupSymbolic Incentives",]
+
+# Anytime appointment
+model_anytime <- glm(appointment_anytime ~ treatment_group + factor(wave) + 
+                     is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                     avg_annual_donations + zip_median_income + us_region + is_urban + 
+                     county_covid_per_100k, 
+                     data = study_sample, family = "binomial")
+print("\nAppointment anytime:")
+summary(model_anytime)$coefficients["treatment_groupSymbolic Incentives",]
+
+# Anytime donation
+model_donate_anytime <- glm(donated_anytime ~ treatment_group + factor(wave) + 
+                           is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                           avg_annual_donations + zip_median_income + us_region + is_urban + 
+                           county_covid_per_100k, 
+                           data = study_sample, family = "binomial")
+print("\nDonation anytime:")
+summary(model_donate_anytime)$coefficients["treatment_groupSymbolic Incentives",]
 ```
-
-\newpage
 
 # Table S8: Unsubscription and Total Donations
 
-This table shows OLS results for secondary outcomes.
-
 ```{r table-s8}
-# Run models for secondary outcomes
-m1_sec <- lm(as.formula(paste("unsubscribe ~ treatment_group + factor(wave)")), data = study_sample)
-m2_sec <- lm(as.formula(paste("unsubscribe ~ treatment_group + factor(wave) +", controls)), data = study_sample)
-m3_sec <- lm(as.formula(paste("total_donations_post_treatment ~ treatment_group + factor(wave)")), data = study_sample)
-m4_sec <- lm(as.formula(paste("total_donations_post_treatment ~ treatment_group + factor(wave) +", controls)), data = study_sample)
+print("Table S8 - Secondary Outcomes (OLS with Robust SEs)")
 
-models_sec <- list(
-  "(1) Unsubscribe" = m1_sec, "(2) Unsubscribe" = m2_sec,
-  "(3) Total Donations" = m3_sec, "(4) Total Donations" = m4_sec
-)
+# Unsubscription without controls
+unsub1 <- lm(unsubscribe ~ treatment_group + factor(wave), data = study_sample)
+print("Unsubscription (No Controls):")
+coeftest(unsub1, vcov = vcovHC(unsub1, type = "HC1"))["treatment_groupSymbolic Incentives",]
 
-modelsummary(models_sec,
-             title = "Table S8: Effect on Unsubscription and Total Donations (OLS with Robust SEs)",
-             fmt = 4, estimate = "{estimate}{stars}", statistic = "({std.error})",
-             vcov = "HC1",
-             coef_map = c("treatment_groupSymbolic Incentives" = "Symbolic Incentives"),
-             gof_map = c("nobs"),
-             add_rows = data.frame(
-               "term" = c("Wave FE", "Controls"),
-               "(1) Unsubscribe" = c("Yes", "No"), "(2) Unsubscribe" = c("Yes", "Yes"),
-               "(3) Total Donations" = c("Yes", "No"), "(4) Total Donations" = c("Yes", "Yes")
-             ),
-             output = "latex")
+# Unsubscription with controls
+unsub2 <- lm(unsubscribe ~ treatment_group + factor(wave) + 
+             is_female + age + race + prior_plasma_donation + bloodtype_group + 
+             avg_annual_donations + zip_median_income + us_region + is_urban + 
+             county_covid_per_100k, 
+             data = study_sample)
+print("\nUnsubscription (With Controls):")
+coeftest(unsub2, vcov = vcovHC(unsub2, type = "HC1"))["treatment_groupSymbolic Incentives",]
+
+# Total donations without controls
+total1 <- lm(total_donations_post_treatment ~ treatment_group + factor(wave), 
+             data = study_sample)
+print("\nTotal Donations (No Controls):")
+coeftest(total1, vcov = vcovHC(total1, type = "HC1"))["treatment_groupSymbolic Incentives",]
+
+# Total donations with controls
+total2 <- lm(total_donations_post_treatment ~ treatment_group + factor(wave) + 
+             is_female + age + race + prior_plasma_donation + bloodtype_group + 
+             avg_annual_donations + zip_median_income + us_region + is_urban + 
+             county_covid_per_100k, 
+             data = study_sample)
+print("\nTotal Donations (With Controls):")
+coeftest(total2, vcov = vcovHC(total2, type = "HC1"))["treatment_groupSymbolic Incentives",]
 ```
-
-\newpage
 
 # Table S9: Heterogeneous Treatment Effects
 
-This table explores whether the treatment effect varies across pre-registered subgroups.
-
 ```{r table-s9}
-# Define models with interaction terms
-hte_models <- list(
-  "Female" = lm(appointment_within_48h ~ treatment_group * is_female + factor(wave), data = study_sample),
-  "High Prior Donations" = lm(appointment_within_48h ~ treatment_group * high_prior_donations + factor(wave), data = study_sample),
-  "Urban" = lm(appointment_within_48h ~ treatment_group * is_urban + factor(wave), data = study_sample),
-  "Majority Dem. County" = lm(appointment_within_48h ~ treatment_group * is_majority_dem_county + factor(wave), data = study_sample)
-)
+print("Table S9 - Heterogeneous Treatment Effects")
 
-modelsummary(hte_models,
-             title = "Table S9: Heterogeneous Treatment Effects on Appointment Creation",
-             fmt = 3, estimate = "{estimate}{stars}", statistic = "({std.error})",
-             vcov = "HC1",
-             coef_rename = c(
-               "treatment_groupSymbolic Incentives" = "Treatment Effect (Symbolic Incentives)",
-               "is_femaleTRUE" = "Baseline (Female)",
-               "high_prior_donationsTRUE" = "Baseline (High Donor)",
-               "is_urbanTRUE" = "Baseline (Urban)",
-               "is_majority_dem_countyTRUE" = "Baseline (Dem. County)",
-               "treatment_groupSymbolic Incentives:is_femaleTRUE" = "Interaction: Trt x Female",
-               "treatment_groupSymbolic Incentives:high_prior_donationsTRUE" = "Interaction: Trt x High Donor",
-               "treatment_groupSymbolic Incentives:is_urbanTRUE" = "Interaction: Trt x Urban",
-               "treatment_groupSymbolic Incentives:is_majority_dem_countyTRUE" = "Interaction: Trt x Dem. County"
-             ),
-             gof_map = "nobs", output = "latex")
+# Female interaction
+print("\n1. FEMALE INTERACTION:")
+
+# Appointment outcome
+hte_female_appt <- lm(appointment_within_48h ~ treatment_group * is_female + factor(wave) + 
+                      age + race + prior_plasma_donation + bloodtype_group + 
+                      avg_annual_donations + zip_median_income + us_region + is_urban + 
+                      county_covid_per_100k, 
+                      data = study_sample)
+print("Appointment Creation:")
+coeftest(hte_female_appt, vcov = vcovHC(hte_female_appt, type = "HC1"))[c("is_female", "treatment_groupSymbolic Incentives:is_female"),]
+
+# Donation outcome
+hte_female_donate <- lm(donated_within_13d ~ treatment_group * is_female + factor(wave) + 
+                        age + race + prior_plasma_donation + bloodtype_group + 
+                        avg_annual_donations + zip_median_income + us_region + is_urban + 
+                        county_covid_per_100k, 
+                        data = study_sample)
+print("\nDonation:")
+coeftest(hte_female_donate, vcov = vcovHC(hte_female_donate, type = "HC1"))[c("is_female", "treatment_groupSymbolic Incentives:is_female"),]
+
+# Annual donations interaction
+print("\n\n2. ANNUAL DONATIONS INTERACTION:")
+
+# Appointment outcome
+hte_donations_appt <- lm(appointment_within_48h ~ treatment_group * avg_annual_donations + factor(wave) + 
+                     is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                     zip_median_income + us_region + is_urban + county_covid_per_100k, 
+                     data = study_sample)
+print("Appointment Creation:")
+coeftest(hte_donations_appt, vcov = vcovHC(hte_donations_appt, type = "HC1"))[c("avg_annual_donations", "treatment_groupSymbolic Incentives:avg_annual_donations"),]
+
+# Donation outcome
+hte_donations_donate <- lm(donated_within_13d ~ treatment_group * avg_annual_donations + factor(wave) + 
+                       is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                       zip_median_income + us_region + is_urban + county_covid_per_100k, 
+                       data = study_sample)
+print("\nDonation:")
+coeftest(hte_donations_donate, vcov = vcovHC(hte_donations_donate, type = "HC1"))[c("avg_annual_donations", "treatment_groupSymbolic Incentives:avg_annual_donations"),]
+
+# Urban interaction
+print("\n\n3. URBAN INTERACTION:")
+
+# Appointment outcome
+hte_urban_appt <- lm(appointment_within_48h ~ treatment_group * is_urban + factor(wave) + 
+                     is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                     avg_annual_donations + zip_median_income + us_region + county_covid_per_100k, 
+                     data = study_sample)
+print("Appointment Creation:")
+coeftest(hte_urban_appt, vcov = vcovHC(hte_urban_appt, type = "HC1"))[c("is_urban", "treatment_groupSymbolic Incentives:is_urban"),]
+
+# Donation outcome
+hte_urban_donate <- lm(donated_within_13d ~ treatment_group * is_urban + factor(wave) + 
+                       is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                       avg_annual_donations + zip_median_income + us_region + county_covid_per_100k, 
+                       data = study_sample)
+print("\nDonation:")
+coeftest(hte_urban_donate, vcov = vcovHC(hte_urban_donate, type = "HC1"))[c("is_urban", "treatment_groupSymbolic Incentives:is_urban"),]
+
+# Democratic county interaction
+print("\n\n4. DEMOCRATIC COUNTY INTERACTION:")
+
+# Appointment outcome
+hte_dem_appt <- lm(appointment_within_48h ~ treatment_group * is_majority_dem_county + factor(wave) + 
+                   is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                   avg_annual_donations + zip_median_income + us_region + is_urban + county_covid_per_100k, 
+                   data = study_sample)
+print("Appointment Creation:")
+coeftest(hte_dem_appt, vcov = vcovHC(hte_dem_appt, type = "HC1"))[c("is_majority_dem_county", "treatment_groupSymbolic Incentives:is_majority_dem_county"),]
+
+# Donation outcome
+hte_dem_donate <- lm(donated_within_13d ~ treatment_group * is_majority_dem_county + factor(wave) + 
+                     is_female + age + race + prior_plasma_donation + bloodtype_group + 
+                     avg_annual_donations + zip_median_income + us_region + is_urban + county_covid_per_100k, 
+                     data = study_sample)
+print("\nDonation:")
+coeftest(hte_dem_donate, vcov = vcovHC(hte_dem_donate, type = "HC1"))[c("is_majority_dem_county", "treatment_groupSymbolic Incentives:is_majority_dem_county"),]
 ```
-
-\newpage
 
 # Table S10: Intention-Behavior Gap
 
-This table analyzes the effect of the treatment on the gap between scheduling an appointment and actually donating.
-
 ```{r table-s10}
-# Filter for the relevant population: those who made an appointment
+print("Table S10 - Intention-Behavior Gap Analysis")
+
+# Filter to those who made appointments
 gap_sample <- study_sample %>% filter(!is.na(intention_behavior_gap))
+print(paste("Sample size for gap analysis:", nrow(gap_sample)))
+print(paste("Control group size:", sum(gap_sample$treatment_group == "Control")))
+print(paste("Treatment group size:", sum(gap_sample$treatment_group == "Symbolic Incentives")))
 
-# Run models
-m1_gap <- glm(intention_behavior_gap ~ treatment_group + factor(wave), data = gap_sample, family = "binomial")
-m2_gap <- glm(intention_behavior_gap ~ treatment_group + factor(wave) + is_female + age + race, data = gap_sample, family = "binomial")
+# Model without controls
+gap_model1 <- glm(intention_behavior_gap ~ treatment_group + factor(wave), 
+                  data = gap_sample, family = "binomial")
+print("\nModel 1 - No Controls:")
+summary(gap_model1)$coefficients["treatment_groupSymbolic Incentives",]
 
-models_gap <- list(
-  "(1) No Controls" = m1_gap,
-  "(2) With Controls" = m2_gap
-)
+# Model with controls
+gap_model2 <- glm(intention_behavior_gap ~ treatment_group + factor(wave) + 
+                  is_female + age + race, 
+                  data = gap_sample, family = "binomial")
+print("\nModel 2 - With Controls:")
+summary(gap_model2)$coefficients["treatment_groupSymbolic Incentives",]
 
-modelsummary(models_gap,
-             title = "Table S10: Effect on Intention-Behavior Gap (Logit Coefficients)",
-             fmt = 3, estimate = "{estimate}{stars}", statistic = "({std.error})",
-             coef_map = c("treatment_groupSymbolic Incentives" = "Symbolic Incentives"),
-             gof_map = c("nobs"),
-             add_rows = data.frame(
-               "term" = c("Wave FE", "Controls"),
-               "(1) No Controls" = c("Yes", "No"),
-               "(2) With Controls" = c("Yes", "Yes")
-             ),
-             output = "latex")
+# Show the actual gap rates by treatment
+gap_rates <- gap_sample %>%
+  group_by(treatment_group) %>%
+  summarise(
+    n = n(),
+    gap_rate = mean(intention_behavior_gap, na.rm = TRUE),
+    donated_rate = 1 - gap_rate
+  )
+print("\nGap rates by treatment group:")
+print(gap_rates)
 ```
